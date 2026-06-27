@@ -1,0 +1,154 @@
+version: 2
+
+models:
+  - name: fact_comfort_safety
+    description: >
+      Fakta kenyamanan dan keamanan cuaca per lokasi per waktu.
+      Berisi heat index dan label kenyamanan berdasarkan suhu dan kelembapan.
+
+    columns:
+      - name: fact_id
+        description: Surrogate key via ROW_NUMBER()
+        tests:
+          - unique
+          - not_null
+
+      - name: location_id
+        description: FK ke dim_location
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_id
+
+      - name: date_key
+        description: FK ke dim_date
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+      - name: time_key
+        description: FK ke dim_time
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+
+      - name: comfort_label
+        description: Label kenyamanan berdasarkan heat index
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  ["Nyaman", "Panas", "Sangat Panas", "Berbahaya", "Ekstrem"]
+
+  - name: fact_energy_proxy
+    description: >
+      Fakta estimasi potensi energi terbarukan per lokasi per waktu.
+      Berisi proxy potensi solar dan angin berdasarkan data cuaca.
+
+    columns:
+      - name: fact_id
+        description: Surrogate key via ROW_NUMBER()
+        tests:
+          - unique
+          - not_null
+
+      - name: location_id
+        description: FK ke dim_location
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_id
+
+      - name: date_key
+        description: FK ke dim_date
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+      - name: time_key
+        description: FK ke dim_time
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+
+      - name: solar_proxy
+        description: Estimasi potensi panel surya berdasarkan tutupan awan
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Tinggi", "Sedang", "Rendah"]
+
+      - name: wind_proxy
+        description: Estimasi potensi turbin angin berdasarkan kecepatan angin
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Kencang", "Sedang", "Lemah"]
+
+  - name: fact_agriculture_proxy
+    description: >
+      Fakta proxy kondisi pertanian per lokasi per waktu.
+      Berisi indikator hujan dan kebutuhan irigasi.
+
+    columns:
+      - name: fact_id
+        description: Surrogate key via ROW_NUMBER()
+        tests:
+          - unique
+          - not_null
+
+      - name: location_id
+        description: FK ke dim_location
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_id
+
+      - name: date_key
+        description: FK ke dim_date
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+      - name: time_key
+        description: FK ke dim_time
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+
+      - name: rain_flag
+        description: TRUE jika ada curah hujan
+        tests:
+          - not_null
+
+      - name: irrigation_flag
+        description: TRUE jika tidak hujan dan kelembapan rendah
+        tests:
+          - not_null

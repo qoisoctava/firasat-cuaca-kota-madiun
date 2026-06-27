@@ -1,0 +1,151 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      Dimensi tanggal. Di-generate dari tanggal unik yang ada
+      di data prakiraan cuaca. Satu baris per hari.
+
+    columns:
+      - name: date_key
+        description: Surrogate key format YYYYMMDD, contoh 20260622
+        tests:
+          - unique
+          - not_null
+
+      - name: date
+        description: Tanggal
+        tests:
+          - unique
+          - not_null
+
+      - name: day_name
+        description: Nama hari dalam bahasa Inggris
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                    "Sunday",
+                  ]
+
+      - name: month_name
+        description: Nama bulan dalam bahasa Inggris
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                  ]
+
+      - name: is_weekend
+        description: TRUE jika Sabtu atau Minggu
+        tests:
+          - not_null
+
+  - name: dim_time
+    description: >
+      Dimensi waktu. 24 baris statis, satu per jam (0-23).
+      Tidak bergantung pada data staging.
+
+    columns:
+      - name: time_key
+        description: Jam (0-23), sekaligus surrogate key
+        tests:
+          - unique
+          - not_null
+
+      - name: hour
+        description: Jam dalam format 0-23
+        tests:
+          - unique
+          - not_null
+
+      - name: time_of_day
+        description: Kategori waktu dalam bahasa Indonesia
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Pagi", "Siang", "Sore", "Malam"]
+
+  - name: dim_location
+    description: >
+      Dimensi lokasi 27 kelurahan Kota Madiun.
+      Diisi oleh DAG 0 dari file seeds/adm4_madiun.csv.
+
+    columns:
+      - name: location_id
+        description: Kode adm4 BMKG, contoh 35.77.01.1001
+        tests:
+          - unique
+          - not_null
+
+      - name: location_name
+        description: Nama kelurahan
+        tests:
+          - not_null
+
+      - name: kecamatan
+        description: Nama kecamatan
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Kartoharjo", "Manguharjo", "Taman"]
+
+      - name: latitude
+        description: Koordinat lintang
+        tests:
+          - not_null
+
+      - name: longitude
+        description: Koordinat bujur
+        tests:
+          - not_null
+
+  - name: dim_weather_condition
+    description: >
+      Dimensi kondisi cuaca. Di-derive dari data staging,
+      berisi kombinasi unik weather_code dan deskripsinya.
+
+    columns:
+      - name: weather_key
+        description: Surrogate key via ROW_NUMBER()
+        tests:
+          - unique
+          - not_null
+
+      - name: weather_code
+        description: Kode cuaca numerik BMKG
+        tests:
+          - unique
+          - not_null
+
+      - name: weather_desc
+        description: Deskripsi cuaca dalam bahasa Indonesia
+        tests:
+          - not_null
+
+      - name: weather_desc_en
+        description: Deskripsi cuaca dalam bahasa Inggris
+        tests:
+          - not_null

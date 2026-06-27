@@ -1,0 +1,20 @@
+# Credentials — JANGAN pernah di-commit
+.env
+
+# Data directories
+logs/
+duckdb/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# OS
+.DS_Store

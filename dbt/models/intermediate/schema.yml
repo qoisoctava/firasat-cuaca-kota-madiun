@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: int_weather_forecast
+    description: >
+      View intermediate di atas staging.stg_weather_forecast.
+      Rename kolom pendek BMKG ke nama yang lebih deskriptif.
+      Dipakai sebagai sumber oleh semua model Gold.
+
+    columns:
+      - name: stg_id
+        description: Surrogate key dari staging
+        tests:
+          - not_null
+
+      - name: location_id
+        description: Kode adm4 BMKG, contoh 35.77.01.1001
+        tests:
+          - not_null
+
+      - name: utc_datetime
+        description: Waktu prakiraan dalam UTC
+        tests:
+          - not_null
+
+      - name: local_datetime
+        description: Waktu prakiraan WIB (UTC+7)
+        tests:
+          - not_null
+
+      - name: temperature
+        description: Suhu udara dalam derajat Celsius
+        tests:
+          - not_null
+
+      - name: humidity
+        description: Kelembapan udara dalam persen
+        tests:
+          - not_null

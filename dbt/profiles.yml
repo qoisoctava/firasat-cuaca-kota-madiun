@@ -1,0 +1,7 @@
+weather_madiun:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /opt/airflow/duckdb/weather.duckdb
+      schema: gold

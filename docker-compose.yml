@@ -1,0 +1,176 @@
+# ============================================================
+# docker-compose.yml — Weather Pipeline
+# Services: RustFS | PostgreSQL | Airflow (init + webserver + scheduler)
+# Platform: linux/arm64
+# ============================================================
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  platform: linux/arm64
+  environment:
+    # ── Airflow core ──────────────────────────────────────────
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD}@postgres:5432/airflow
+    # ── RustFS connection (tersedia sebagai env var di semua task) ──
+    RUSTFS_ENDPOINT: "http://rustfs:9000"
+    RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+    RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+    RUSTFS_BUCKET_WEATHER: "weather"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./ingestion:/opt/airflow/ingestion # modul Python helper (api_bmkg, dll)
+    - ./dbt:/opt/airflow/dbt # project dbt
+    - duckdb-data:/opt/airflow/duckdb # Silver + Gold layer
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rustfs:
+      condition: service_healthy
+    duckdb-perms: # ← tambahkan ini
+      condition: service_completed_successfully
+
+services:
+  # ── RustFS permission init ─────────────────────────────────
+  # RustFS berjalan sebagai user 10001, volume perlu di-chown dulu
+  rustfs-perms:
+    image: busybox
+    platform: linux/arm64
+    volumes:
+      - rustfs-data:/data
+    command: chown -R 10001:10001 /data
+
+  duckdb-perms:
+    image: busybox
+    platform: linux/arm64
+    volumes:
+      - duckdb-data:/duckdb
+    command: chown -R 50000:50000 /duckdb
+
+  # ── RustFS (Bronze Layer — object storage S3-compatible) ───
+  rustfs:
+    image: rustfs/rustfs:latest
+    platform: linux/arm64
+    container_name: rustfs
+    depends_on:
+      rustfs-perms:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: "0.0.0.0:9000"
+      RUSTFS_CONSOLE_ADDRESS: "0.0.0.0:9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs-data:/data
+    ports:
+      - "9000:9000" # S3 API endpoint
+      - "9001:9001" # Web console → buka http://localhost:9001/rustfs/console/
+    healthcheck:
+      test:
+        ["CMD", "sh", "-c", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── PostgreSQL (metadata Airflow) ──────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    platform: linux/arm64
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Airflow Init (one-time: migrate DB + buat user admin) ──
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    # Override depends_on: init tidak butuh tunggu rustfs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password "${AIRFLOW_ADMIN_PASSWORD}"
+    restart: on-failure
+
+  # ── Airflow Webserver (UI) ─────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_healthy
+    ports:
+      - "8080:8080" # Airflow UI → buka http://localhost:8080
+    command: webserver
+    restart: unless-stopped
+
+  # ── Airflow Scheduler ──────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_healthy
+    command: scheduler
+    restart: unless-stopped
+
+  # ── Streamlit Dashboard ───────────────────────────────────────
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    platform: linux/arm64
+    container_name: streamlit
+    depends_on:
+      duckdb-perms:
+        condition: service_completed_successfully
+    volumes:
+      - duckdb-data:/opt/streamlit/duckdb # share DuckDB dengan Airflow
+      - ./streamlit:/opt/streamlit/app # mount folder streamlit dari host
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+# ── Named Volumes ──────────────────────────────────────────
+volumes:
+  rustfs-data: # Bronze layer — Parquet files
+  postgres-data: # Airflow metadata
+  duckdb-data: # Silver + Gold layer — file .duckdb
